@@ -2,7 +2,7 @@ import zarr
 import os
 
 # Pointing directly to where Kaggle mounts the data in the cloud
-data_dir = "/kaggle/input/biohub-cell-tracking-during-development/train"
+data_dir = "/kaggle/input/competitions/biohub-cell-tracking-during-development/train"
 
 def inspect_zarr(file_path):
     print(f"--- Inspecting: {file_path} ---")
