@@ -8,12 +8,13 @@ def get_centroids(file_path, output_csv="tracking_data.csv"):
     # Open the Zarr group
     dataset = zarr.open(file_path, mode='r')
     
-    # FIX: Point to the actual data array inside the group
+    # Point to the actual data array inside the group
     data_array = dataset['0'] 
     
     tracking_data = []
 
     print(f"Processing volume with shape: {data_array.shape}")
+    print(f"Targeting file: {file_path}")
     
     # Use data_array to iterate through dimensions
     for t in range(data_array.shape[0]):
@@ -21,13 +22,13 @@ def get_centroids(file_path, output_csv="tracking_data.csv"):
             # Access the image slice from the array
             image = data_array[t, z, :, :]
             
-            # --- Your Proven Pipeline ---
+            # --- The Robust Pipeline ---
             background = morphology.white_tophat(image, morphology.disk(15))
             denoised = restoration.denoise_nl_means(background, h=0.08, fast_mode=True, patch_size=5, patch_distance=6)
             final_clean = exposure.rescale_intensity(denoised, out_range=(0, 1))
             binary_mask = final_clean > filters.threshold_otsu(final_clean)
             
-            # Watershed separation
+            # Watershed separation (to handle cell division and touching cells)
             distance = ndi.distance_transform_edt(binary_mask)
             coords = feature.peak_local_max(distance, min_distance=15, labels=binary_mask)
             mask = np.zeros(distance.shape, dtype=bool)
@@ -35,7 +36,7 @@ def get_centroids(file_path, output_csv="tracking_data.csv"):
             markers, _ = ndi.label(mask)
             labels = segmentation.watershed(-distance, markers, mask=binary_mask)
             
-            # --- Extract Centroids ---
+            # --- Extract Spatial Coordinates ---
             props = measure.regionprops(labels)
             for prop in props:
                 y, x = prop.centroid
@@ -48,12 +49,12 @@ def get_centroids(file_path, output_csv="tracking_data.csv"):
                 })
         print(f"Processed time frame {t}")
 
-    # Save to CSV
+    # Save the mathematical structure to CSV
     df = pd.DataFrame(tracking_data)
     df.to_csv(output_csv, index=False)
-    print(f"Tracking data saved to {output_csv}")
+    print(f"Tracking data successfully generated and saved to {output_csv}")
 
 if __name__ == "__main__":
-    # Ensure this path matches your data structure
-    path = "/kaggle/input/competitions/biohub-cell-tracking-during-development/train/6bba_cf35214c.zarr"
+    # NEW TARGET: Testing a different file for the 71% Private Set Robustness Check
+    path = "/kaggle/input/competitions/biohub-cell-tracking-during-development/train/8a93_cf35214c.zarr"
     get_centroids(path)
