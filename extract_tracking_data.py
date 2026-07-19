@@ -56,5 +56,5 @@ def get_centroids(file_path, output_csv="tracking_data.csv"):
 
 if __name__ == "__main__":
     # NEW TARGET: Testing a different file for the 71% Private Set Robustness Check
-    path = "/kaggle/input/competitions/biohub-cell-tracking-during-development/train/8a93_cf35214c.zarr"
+    path = "/kaggle/input/competitions/biohub-cell-tracking-during-development/train/44b6_2f31fc2f.zarr"
     get_centroids(path)
