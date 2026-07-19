@@ -8,7 +8,7 @@ def inspect_zarr(file_path):
     print(f"--- Inspecting: {file_path} ---")
     try:
         dataset = zarr.open(file_path, mode='r')
-        if isinstance(dataset, zarr.hierarchy.Group):
+        if isinstance(dataset, zarr.Group):
             print("Type: Zarr Group")
             for key in dataset.array_keys():
                 arr = dataset[key]
