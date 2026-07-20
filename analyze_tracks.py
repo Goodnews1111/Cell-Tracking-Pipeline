@@ -11,10 +11,11 @@ def detect_cell_divisions(df, max_daughter_dist=15.0):
     """
     Detect mitosis: parent track ending at frame t where two daughter 
     tracks emerge at frame t+1 within spatial proximity.
+    Includes distance-based tie-breaking for dense clusters.
     """
     divisions = []
     
-    # Calculate terminal coordinates for all tracks
+    # Track endpoints
     track_ends = df.groupby('track_id').agg(
         end_time=('time', 'max'),
         x_end=('x', 'last'),
@@ -22,7 +23,7 @@ def detect_cell_divisions(df, max_daughter_dist=15.0):
         z_end=('z_slice', 'last')
     ).reset_index()
 
-    # Calculate initial coordinates for all tracks
+    # Track start points
     track_starts = df.groupby('track_id').agg(
         start_time=('time', 'min'),
         x_start=('x', 'first'),
@@ -30,31 +31,43 @@ def detect_cell_divisions(df, max_daughter_dist=15.0):
         z_start=('z_slice', 'first')
     ).reset_index()
 
-    # Link parent terminals to daughter origins
     for _, parent in track_ends.iterrows():
         t_end = parent['end_time']
         p_id = parent['track_id']
         p_pos = np.array([parent['x_end'], parent['y_end'], parent['z_end']])
 
-        # Look for daughters starting at frame t + 1
+        # Find daughters emerging at frame t + 1
         candidates = track_starts[track_starts['start_time'] == t_end + 1]
 
         if len(candidates) >= 2:
             cand_pos = candidates[['x_start', 'y_start', 'z_start']].values
             distances = np.linalg.norm(cand_pos - p_pos, axis=1)
 
-            # Identify daughters within distance threshold
-            close_daughters = candidates[distances <= max_daughter_dist]['track_id'].tolist()
+            close_mask = distances <= max_daughter_dist
+            close_candidates = candidates[close_mask]
+            close_dists = distances[close_mask]
 
-            if len(close_daughters) == 2:
+            if len(close_candidates) == 2:
+                d_ids = close_candidates['track_id'].tolist()
                 divisions.append({
                     'parent_track_id': p_id,
-                    'daughter_1_id': close_daughters[0],
-                    'daughter_2_id': close_daughters[1],
-                    'division_frame': t_end + 1
+                    'daughter_1_id': d_ids[0],
+                    'daughter_2_id': d_ids[1],
+                    'division_frame': t_end + 1,
+                    'avg_distance': close_dists.mean()
                 })
 
-    return pd.DataFrame(divisions)
+    div_df = pd.DataFrame(divisions)
+    
+    # Resolve multi-parent collisions: keep the single parent with the smallest distance
+    if not div_df.empty:
+        div_df = (div_df.sort_values('avg_distance')
+                        .groupby(['daughter_1_id', 'daughter_2_id'])
+                        .first()
+                        .reset_index())
+        div_df = div_df.drop(columns=['avg_distance'])
+
+    return div_df
 
 def main():
     print("--- Loading Linked Tracks ---")
@@ -71,9 +84,9 @@ def main():
     print(f"Cleaned tracks (length >= 4): {cleaned_df['track_id'].nunique()}")
     cleaned_df.to_csv('cleaned_tracks.csv', index=False)
 
-    # 2. Detect cell division lineage
+    # 2. Detect cell division lineage with collision resolution
     div_df = detect_cell_divisions(cleaned_df, max_daughter_dist=15.0)
-    print(f"Detected mitosis events: {len(div_df)}")
+    print(f"Detected true mitosis events (conflict-resolved): {len(div_df)}")
     div_df.to_csv('cell_divisions.csv', index=False)
 
     print("\nAnalysis complete! Saved 'cleaned_tracks.csv' and 'cell_divisions.csv'.")
