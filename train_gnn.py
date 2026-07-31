@@ -34,7 +34,7 @@ class CellEdgeClassifier(torch.nn.Module):
 def main():
     print("--- Loading PyTorch Graph Data ---")
     try:
-        data = torch.load('graph_data.pt')
+        data = torch.load('graph_data.pt', weights_only=False)
     except FileNotFoundError:
         print("Error: 'graph_data.pt' not found. Run build_dataset.py first.")
         return
