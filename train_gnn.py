@@ -36,7 +36,7 @@ def main():
     try:
         data = torch.load('graph_data.pt')
     except FileNotFoundError:
-        print("Error: 'graph_data.pt' not found. Run build_datasets.py first.")
+        print("Error: 'graph_data.pt' not found. Run build_dataset.py first.")
         return
 
     # Initialize the Neural Network
