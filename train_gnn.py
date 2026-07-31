@@ -1,11 +1,10 @@
 import torch
-from torch.nn import Linear, Sequential, ReLU, Sigmoid
-import torch.nn.functional as F
+from torch.nn import Linear, Sequential, ReLU, Sigmoid, BCELoss
+from torch.optim import Adam
 
 class CellEdgeClassifier(torch.nn.Module):
     def __init__(self):
         super(CellEdgeClassifier, self).__init__()
-        # Input features: Source Node (4) + Target Node (4) + Edge Attr (4) = 12 features
         self.mlp = Sequential(
             Linear(12, 64),
             ReLU(),
@@ -14,43 +13,69 @@ class CellEdgeClassifier(torch.nn.Module):
             Linear(32, 16),
             ReLU(),
             Linear(16, 1),
-            Sigmoid() # Outputs a probability between 0.0 and 1.0
+            Sigmoid() 
         )
 
     def forward(self, x, edge_index, edge_attr):
-        # 1. Get the indices for the source and target nodes of every edge
         src_nodes, dst_nodes = edge_index
-        
-        # 2. Extract the actual node features using those indices
         x_src = x[src_nodes]
         x_dst = x[dst_nodes]
-        
-        # 3. Concatenate everything together into a massive feature matrix for the edges
         edge_inputs = torch.cat([x_src, x_dst, edge_attr], dim=1)
-        
-        # 4. Pass through the Neural Network
         return self.mlp(edge_inputs)
+
+def train_model(model, data, epochs=100):
+    print("--- Generating Training Labels ---")
+    # For this initial test run, we will generate pseudo-labels based on normalized distance.
+    # We will assume very close edges (normalized distance < -0.5) are True (1.0), and others are False (0.0).
+    distances = data.edge_attr[:, 0] 
+    labels = (distances < -0.5).float().view(-1, 1)
+    
+    criterion = BCELoss() # Binary Cross Entropy Loss
+    optimizer = Adam(model.parameters(), lr=0.005) # Adam Optimizer
+    
+    print("\n--- Starting Training Loop ---")
+    model.train()
+    for epoch in range(epochs):
+        optimizer.zero_grad()
+        
+        # 1. Forward pass: Make predictions
+        predictions = model(data.x, data.edge_index, data.edge_attr)
+        
+        # 2. Calculate Loss: How far off were the predictions?
+        loss = criterion(predictions, labels)
+        
+        # 3. Backward pass: Update the weights to get smarter
+        loss.backward()
+        optimizer.step()
+        
+        if (epoch + 1) % 10 == 0:
+            print(f"Epoch {epoch+1:03d}/{epochs} | Loss: {loss.item():.4f}")
+            
+    return model, predictions, labels
 
 def main():
     print("--- Loading PyTorch Graph Data ---")
     try:
         data = torch.load('graph_data.pt', weights_only=False)
     except FileNotFoundError:
-        print("Error: 'graph_data.pt' not found. Run build_dataset.py first.")
+        print("Error: 'graph_data.pt' not found.")
         return
 
-    # Initialize the Neural Network
     model = CellEdgeClassifier()
-    print("\n--- Neural Network Architecture ---")
-    print(model)
     
-    # Run a test Forward Pass (untrained)
-    print("\n--- Testing Forward Pass ---")
-    with torch.no_grad(): # Disable gradients for a quick test
-        predictions = model(data.x, data.edge_index, data.edge_attr)
-        
-    print(f"Generated {len(predictions)} edge probabilities.")
-    print(f"Sample prediction outputs (Probabilities):\n{predictions[:5].flatten().numpy()}")
+    # Run the training loop!
+    trained_model, final_preds, targets = train_model(model, data, epochs=100)
+    
+    print("\n--- Training Complete ---")
+    print("Sample final predictions vs targets:")
+    for i in range(5):
+        pred_val = final_preds[i].item()
+        target_val = targets[i].item()
+        print(f"Edge {i}: Predicted = {pred_val:.4f} | Target = {target_val}")
+
+    # Save the trained model weights
+    torch.save(trained_model.state_dict(), 'gnn_tracker_weights.pth')
+    print("\nSaved trained model to 'gnn_tracker_weights.pth'")
 
 if __name__ == "__main__":
     main()
